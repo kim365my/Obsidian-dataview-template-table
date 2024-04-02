@@ -1,0 +1,159 @@
+/* 기본설정 변경 */
+.cm-preview-code-block.cm-embed-block.markdown-rendered:has(.block-language-dataviewjs)  {
+    contain: unset !important;
+}
+.cm-preview-code-block.cm-embed-block.markdown-rendered:has(.block-language-dataviewjs):hover {
+    overflow: visible;
+}
+.cards .block-language-dataviewjs .pageDataRendererjs ~ div thead ,
+.block-language-dataviewjs + .edit-block-button {
+    display: none !important;
+}
+.cards table.dataview tbody>tr>td a {
+    overflow: hidden;
+    -webkit-line-clamp: 2;
+    display: box;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    text-overflow: ellipsis;
+    white-space: normal;
+}
+
+/* 타이틀 스타일 */
+.block-language-dataviewjs .title {
+    width: auto !important;
+    margin-top: 0;
+}
+
+/* 컨테이너별 스타일 설정 */
+.block-language-dataviewjs .pageDataRendererjs {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding-bottom: 4px;
+}
+.pageDataRendererjs > div:first-child {
+    display: flex;
+    align-items: flex-start;
+    padding-bottom: 4px;
+}
+.pageDataRendererjs > div:last-child { 
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    
+}
+/* 테이블 tr별 설정 */
+.cards.cards-wide table.dataview tbody {
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+.cards table tr .external-link {
+    padding-right: 0;
+}
+
+.cards table.dataview tbody>tr>td>ul:has(li img) {
+    display: flex;
+    justify-content: center;
+    align-items: start;
+}
+.dataview-inline-lists .markdown-preview-view .dataview-ul li:has(img):not(:last-child):after, 
+.dataview-inline-lists .markdown-source-view .dataview-ul li:has(img):not(:last-child):after {
+    content: "";
+}
+/* pagination */
+.block-language-dataviewjs .pageDataRendererjs .pagination button:hover,
+.block-language-dataviewjs .pageDataRendererjs .pagination button.is-active {
+    background-color: var(--background-modifier-hover);
+}
+.block-language-dataviewjs .pageDataRendererjs .pagination_container {
+    display: flex;
+}
+.block-language-dataviewjs .pageDataRendererjs .pagination_container button {
+    display: inline-block;
+    background-color: transparent;
+}
+.block-language-dataviewjs .pageDataRendererjs .pagination_container button.is-disabled {
+    display: none;
+}
+
+/* textSearch */
+.block-language-dataviewjs .search-input-container:has( + .searchBtn) {
+    display: none;
+} 
+.block-language-dataviewjs .search-input-container:has( + .searchBtn.is-active) {
+    display: block;
+} 
+
+/* filtering */
+.block-language-dataviewjs .nav-action-button {
+    position: relative;
+}
+.block-language-dataviewjs .menu {
+    display: none; 
+    width: max-content;
+    max-height: 300px;
+    overflow: auto;
+    /* position */
+    position: absolute; 
+    right: 0;
+    bottom: 0;
+    transform: translateY(100%);
+    z-index: 100;
+}
+.block-language-dataviewjs .nav-action-button.has-active-menu .menu {
+    display: block;
+}
+/* filtering menu */
+.block-language-dataviewjs .menu .menu-item {
+    cursor: pointer; 
+    display: flex;
+    justify-content: space-between;
+}
+.block-language-dataviewjs .menu .menu-item svg {
+    display: none;
+}
+.block-language-dataviewjs .menu .menu-item.mod-checked svg {
+    display: block;
+    width: var(--icon-s);
+}
+.block-language-dataviewjs .useFilterItem {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100%;
+    flex-wrap: wrap;
+    padding: 4px;
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--blockquote-color);
+}
+
+.block-language-dataviewjs .useFilterItem .tip_txt{
+    padding: 2px 0;
+    margin-right: 8px;
+}
+.block-language-dataviewjs .useFilterItem .filterItem {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    padding: 2px 8px;
+    margin-right: 6px;
+    cursor: pointer;
+    border: 1px solid var(--divider-color);
+    border-radius: 6px;
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.block-language-dataviewjs .useFilterItem .filterItem:hover {
+    text-decoration: line-through;
+}
+
+/* link 스타일 */
+.pageDataRendererjs ~ div table .external-link {
+    background-image: none;
+}
