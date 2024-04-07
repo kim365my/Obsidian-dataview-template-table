@@ -564,7 +564,7 @@ class DataRenderer {
 	// Get md file row data
 	async processMdRow(page) {
 		let rowsValue = [];
-		if (page.cover_url !== null) {
+		if (page.cover_url) {
 			const src = (this.HasImgLocal)? await this.getFileRealLink(page.cover_url.path) : page.cover_url; 
 			const cover = isMobile || src === null ? page.cover_url : `<a href="obsidian://advanced-uri?filepath=${page.file.link.path}"><img src="${src}">`;
 			rowsValue.push(cover, page.file.link);
