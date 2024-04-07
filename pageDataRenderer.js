@@ -564,8 +564,9 @@ class DataRenderer {
 	// Get md file row data
 	async processMdRow(page) {
 		let rowsValue = [];
-		if (page.cover_url) {
-			const cover = isMobile ? page.cover_url : `<a href="obsidian://advanced-uri?filepath=${page.file.link.path}"><img src="${this.HasImgLocal ? await this.getFileRealLink(page.cover_url.path) : page.cover_url}">`;
+		if (page.cover_url !== null) {
+			const src = (this.HasImgLocal)? await this.getFileRealLink(page.cover_url.path) : page.cover_url; 
+			const cover = isMobile || src === null ? page.cover_url : `<a href="obsidian://advanced-uri?filepath=${page.file.link.path}"><img src="${src}">`;
 			rowsValue.push(cover, page.file.link);
 		} else {
 			rowsValue.push(page.file.link);
@@ -605,9 +606,16 @@ class DataRenderer {
 	}
 	
 	async getFileRealLink(value) {
-		let realFile = app.metadataCache.getFirstLinkpathDest(value, "");
-		let resourcePath = app.vault.getResourcePath(realFile);
-		return resourcePath;
+		try {			
+			const realFile = app.metadataCache.getFirstLinkpathDest(value, "");
+			if (realFile) {
+				const resourcePath = app.vault.getResourcePath(realFile);
+				return resourcePath;
+			}
+			return null
+		} catch (error) {
+			console.log(error, value);
+		}
 	}
 
 }
