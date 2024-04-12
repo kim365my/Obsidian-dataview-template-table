@@ -7,7 +7,7 @@
 ```dataviewjs
 let input = {
 	"pages": '#독서',
-	"row" : 'author, finish_read_date, tags',
+	"row" : 'cover_url, file.link, author, finish_read_date, tags',
 	"imgLocal" : 'false',
 	"selectedValue": 20,
 	"filter" : [
@@ -115,6 +115,8 @@ await dv.view("etc/module/views/pageDataRenderer", input)
 	- cssClass 추가
 		- cards-wide: 카드 너비를 340px로 넓힘
 - 24/03/27 : 필터 분류기능 추가, 새로운 필터 변수 class를 통해 필터를 분류가능
+- 24/04/02 : 깃허브 업로드
+- 24/04/13 : 기본적으로 file.link와 cover_url을 추가하던 것을 폐기. 이제부터는 row에 작성해야 표시
 */
 
 
@@ -262,7 +264,7 @@ class DataRenderer {
 		if (input.sort) this.sort.push(...input.sort);
 
 		this.selectSortValue = Number(input.sortDefault) || 0;
-		if (this.selectSortValue !== 1) {
+		if (this.selectSortValue === 0) {
 			this.pages.values = this.pages.values.reverse();
 		}
 
@@ -564,40 +566,44 @@ class DataRenderer {
 	// Get md file row data
 	async processMdRow(page) {
 		let rowsValue = [];
-		if (page.cover_url) {
-			const src = (this.HasImgLocal)? await this.getFileRealLink(page.cover_url.path) : page.cover_url; 
-			const cover = isMobile || src === null ? page.cover_url : `<a href="obsidian://advanced-uri?filepath=${page.file.link.path}"><img src="${src}">`;
-			rowsValue.push(cover, page.file.link);
-		} else {
-			rowsValue.push(page.file.link);
-		}
-	
+
 		if (this.input.row) {
 			const rowArr = this.input.row.split(",");
-			rowArr.forEach(e => {
-				let result;
-				if (page[e.trim()]) {
-					result = page[e.trim()];
-				} else if (e.includes("file.tags")) {
-					result = page.file.tags;
-				} else if (e.includes("file.")) {
-					const fileType = e.replace("file.", "").trim();
+			for(let row of rowArr) {
+				let result = "";
+				if (row.includes("file.")) {
+					const fileType = row.replace("file.", "").trim();
 					result = page.file[fileType];
-				} else {
-					result = "-";
 				}
+
+				if (page[row] !== undefined && page[row] !== null) {
+					if (row === "cover_url") {
+						let src = "";
+						if (String(page.cover_url).startsWith("![[")) {
+							src = await this.getFileRealLink(page.cover_url.path);
+						} else {
+							src = page.cover_url;
+						}
+
+						if (isMobile || src === "") {
+							result = page.cover_url;
+						} else {
+							result = `<a href="obsidian://advanced-uri?filepath=${page.file.link.path}"><img src="${src}">`;
+						}
+					} else {
+						result = page[row];
+					}
+				}
+
 				rowsValue.push(result);
-			});
+			}
 		}
 		return rowsValue;
 	}
 
 	async processMdHeader(rows) {
-		let isIncludeCoverImg = false;
-		rows.forEach(value => {
-			isIncludeCoverImg = Object.keys(value).includes('cover_url');
-		});
-		let result =  isIncludeCoverImg ? ["cover_img", "title"] : ["title"];
+		let result = [];
+
 		if (this.input.row) { 
 			const rowArr = this.input.row.split(",");
 			rowArr.forEach((e) => result.push(e.trim()));
@@ -757,6 +763,7 @@ class DataManipulator {
 					} else {
 						// filter type에 따라서 구분
 						const target_isInclude = filter.target_isInclude === "true" || false;
+
 						switch (filter.type) {
 							// 프로퍼티의 tags만 고르는 경우
 							case "tags":
@@ -764,14 +771,6 @@ class DataManipulator {
 									result = result && b.tags.includes(filter.target);
 								} else {
 									result = result && !b.tags.includes(filter.target);
-								}
-								break;
-							// 문서내부의 전체 tags를 고르는 경우
-							case "file.tags":
-								if (target_isInclude) {
-									result = result && b.file.tags.values.includes(filter.target);
-								} else {
-									result = result && !b.file.tags.values.includes(filter.target);
 								}
 								break;
 							// 프로퍼티를 고르는 경우
@@ -793,6 +792,7 @@ class DataManipulator {
 											result = result && (date - property) === 0;
 										}
 									} else if (dv.value.isArray(property)) {
+										// 배열인 경우
 										result = result && property.includes(filter.target_content);
 									} else {
 										result = result &&  String(property).toLowerCase() === String(filter.target_content).toLowerCase();
@@ -801,6 +801,25 @@ class DataManipulator {
 									result = result && (property !== null && property !== undefined);
 								} else {
 									result = result && (property == null || property == undefined || property == "");
+								}
+								break;
+							// file
+							// 문서내부의 전체 tags를 고르는 경우
+							case "file.tags":
+								if (target_isInclude) {
+									result = result && b.file.tags.values.includes(filter.target);
+								} else {
+									result = result && !b.file.tags.values.includes(filter.target);
+								}
+								break;
+							case "file.inlinks":
+							case "file.outlinks":
+								const type = filter.type.replace("file.", "").trim();
+								const fileType = b.file[type].values;
+								if (target_isInclude) {
+									result = result && (fileType.length !== 0);
+								} else {
+									result = result && fileType.some((value) => value.path.includes(filter.target));
 								}
 								break;
 							default:
@@ -813,6 +832,7 @@ class DataManipulator {
 		}
 		return pages;
 	}
+
 	async updateFilterItem() {
 		const selectFilterValue = this.dataRenderer.selectFilterValue;
 
@@ -1217,6 +1237,8 @@ async function jsonToCSV(json_data) {
 			} else if (String(data).includes(separator)) {
 				data = `"${data}"`;
 			}
+			data = String(data).replace(/\n/ig, "<br/>");
+
 			row += ((num === 0) ? `${data}` : `${separator}${data}`);
 			num++;
 		}
