@@ -127,4 +127,8 @@ await dv.view("etc/module/views/pageDataRenderer", input)
 		- cards-wide: 카드 너비를 340px로 넓힘
 - 24/03/27 : 필터 분류기능 추가, 새로운 필터 변수 class를 통해 필터를 분류가능
 - 24/04/02 : 깃허브 업로드
-- 24/04/13 : 기본적으로 file.link와 cover_url을 추가하던 것을 폐기. 이제부터는 row에 작성해야 표시
+- 24/04/13
+	- 기본적으로 file.link와 cover_url을 추가하던 것을 폐기. 이제부터는 row에 작성해야 표시
+	- HasImgLocal 변수 제거
+	- filter 기능에 file.name, file.aliases, file.inlinks, file.outlinks 변수 지원 추가
+	- 이제부터 검색은 file.name 뿐만 아니라 file.aliases도 검사

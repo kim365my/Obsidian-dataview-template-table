@@ -8,7 +8,6 @@
 let input = {
 	"pages": '#독서',
 	"row" : 'cover_url, file.link, author, finish_read_date, tags',
-	"imgLocal" : 'false',
 	"selectedValue": 20,
 	"filter" : [
 		{
@@ -72,7 +71,6 @@ await dv.view("etc/module/views/pageDataRenderer", input)
 
 # 선택적 변수
 - header : (string) 제목추가, multi 콜아웃에서 해당 코드를 사용할 경우 유용
-- imgLocal : (true/ false)
 - selectedValue : (number) 표시할 페이지 수를 작성
 - sortDefault : (number 0 / 1) : 최신순 / 오래된순으로 기본적으로 정렬할 것인지 선택
 - filter 
@@ -116,7 +114,11 @@ await dv.view("etc/module/views/pageDataRenderer", input)
 		- cards-wide: 카드 너비를 340px로 넓힘
 - 24/03/27 : 필터 분류기능 추가, 새로운 필터 변수 class를 통해 필터를 분류가능
 - 24/04/02 : 깃허브 업로드
-- 24/04/13 : 기본적으로 file.link와 cover_url을 추가하던 것을 폐기. 이제부터는 row에 작성해야 표시
+- 24/04/13
+	- 기본적으로 file.link와 cover_url을 추가하던 것을 폐기. 이제부터는 row에 작성해야 표시
+	- HasImgLocal 변수 제거
+	- filter 기능에 file.name, file.aliases, file.inlinks, file.outlinks 변수 지원 추가
+	- 이제부터 검색은 file.name 뿐만 아니라 file.aliases도 검사
 */
 
 
@@ -164,7 +166,6 @@ class DataRenderer {
 
 		// Variables
 		this.MAX_BUTTONS_TO_SHOW = isMobile ? 1 : 10;
-		this.HasImgLocal = input.imgLocal === "true" || false;
 		
 		this.currentPage = 1;
 		this.startButton = 1;
@@ -741,7 +742,11 @@ class DataManipulator {
 					return result;
 				});
 			} else {
-				pages = pages.filter((b) => String(b.file.name).toLowerCase().includes(search));
+				pages = pages.filter((b) => {
+					const isIncludeFileName = String(b.file.name).toLowerCase().includes(search);
+					const isIncludeFileAliases = b.file.aliases.some((value) => value.toLowerCase().includes(search))
+					return isIncludeFileName || isIncludeFileAliases;
+				});
 			}
 		}
 
@@ -810,6 +815,16 @@ class DataManipulator {
 									result = result && b.file.tags.values.includes(filter.target);
 								} else {
 									result = result && !b.file.tags.values.includes(filter.target);
+								}
+								break;
+							case "file.name":
+							case "file.aliases":
+								const fileName = b.file.name;
+								const fileAliases = b.file.aliases.values;
+								if (target_isInclude) {
+									result = result && (fileName.includes(filter.target) || fileAliases.some((value) => value.includes(filter.target)));
+								} else {
+									result = result && (!fileName.includes(filter.target) || !fileAliases.some((value) => value.includes(filter.target)));
 								}
 								break;
 							case "file.inlinks":
