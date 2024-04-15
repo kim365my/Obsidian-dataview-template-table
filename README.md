@@ -3,6 +3,9 @@ This is dataviewjs code for Obsidian's data view.
 
 ![image](https://github.com/kim365my/Obsidian-dataview-template-table/assets/102598905/3b7efba9-f19e-4f97-bb6a-7dea1b2ea5f9)
 
+css class를 추가해서 마음에 드는대로 조절할 수 있습니다.  
+![image](https://github.com/kim365my/Obsidian-dataviewjs-template-table/assets/102598905/9aac6d7f-2400-438f-807f-beda862f225d)
+![image](https://github.com/kim365my/Obsidian-dataviewjs-template-table/assets/102598905/272f79ef-c1c4-4d3e-9dc2-38925c94ef8b)
 
 
 ## 사용 전 필요한 플러그인
