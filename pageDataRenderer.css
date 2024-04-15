@@ -5,13 +5,13 @@
 .cm-preview-code-block.cm-embed-block.markdown-rendered:has(.block-language-dataviewjs):hover {
     overflow: visible;
 }
-.cards .block-language-dataviewjs .pageDataRendererjs ~ div thead {
+.block-language-dataviewjs .pageDataRendererjs ~ div thead {
     display: none !important;
 }
 .markdown-source-view.mod-cm6.is-live-preview.is-readable-line-width .block-language-dataviewjs + .edit-block-button {
     right: 0 !important;
 }
-.cards table.dataview tbody>tr>td a {
+/* .cards table.dataview tbody>tr>td a {
     overflow: hidden;
     -webkit-line-clamp: 2;
     display: box;
@@ -19,7 +19,7 @@
     -webkit-box-orient: vertical;
     text-overflow: ellipsis;
     white-space: normal;
-}
+} */
 
 /* 타이틀 스타일 */
 .block-language-dataviewjs .title {
@@ -159,4 +159,9 @@
 /* link 스타일 */
 .pageDataRendererjs ~ div table .external-link {
     background-image: none;
+}
+
+/* 이미지 크기 */
+.ImgHeight80 table img {
+	height: 80px;
 }

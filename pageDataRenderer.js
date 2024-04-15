@@ -1,7 +1,7 @@
 /*
 # 사용 전 필요한 플러그인 
-- 필수 : advanced-uri (이미지 클릭시 해당 md 파일로 넘어가게 해줌)
-- 선택 (없이도 작동됨) : templater / customjs
+- 필수 : dataview
+- 선택 (없이도 작동됨) : templater / customjs / minimal theme
 
 # 작성형식
 ```dataviewjs
@@ -119,8 +119,8 @@ await dv.view("etc/module/views/pageDataRenderer", input)
 	- filter 기능에 file.name, file.aliases, file.inlinks, file.outlinks 변수 지원 추가
 	- 이제부터 검색은 file.name 뿐만 아니라 file.aliases도 검사
 - 24/04/15
-	- header 변수 제거
 	- 이제부터 cover_url에 일일히 대표 이미지를 지정하지 않아도 자동으로 문서 내부의 이미지를 불러와 줌 (아쉽게도 로컬 이미지만 가능)
+	- 더이상 advanced-uri가 없이도 작동
 */
 
 // Access Obsidian API
@@ -310,6 +310,12 @@ class DataRenderer {
 	}
 	
 	// ele 생성
+	/** 타이틀 생성 */
+	async createHeader() {
+		return `<h2 class="HyperMD-header HyperMD-header-2 title">
+					<span class="cm-header cm-header-2">${this.input.header}</span>
+				</h2>`
+	}
 	
 	/** select 생성 */
 	async createSelect() {
@@ -359,10 +365,8 @@ class DataRenderer {
 						}
 					})
 					result += `
-					<!-- 필터 버튼 클릭시 모달창 오픈되게 -->
 					<button class="filteringBtn clickable-icon nav-action-button" aria-label="필터 보기">
 						<span>${className}</span>
-						<!-- 모달창  -->
 						<div class="filtering_menu menu">${item}</div>
 					</button>
 					`
@@ -375,12 +379,10 @@ class DataRenderer {
 			if (value.class === undefined) item +=	value.template;
 		})
 		result += `
-			<!-- 필터 버튼 클릭시 모달창 오픈되게 -->
 			<button class="filteringBtn clickable-icon nav-action-button" aria-label="필터 보기">
 				<svg class="svg-icon lucide-filter" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" stroke="currentColor" fill="none" viewBox="0 0 24 24" height="24" width="24" xmlns="http://www.w3.org/2000/svg">
 					<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
 				</svg>
-				<!-- 모달창  -->
 				<div class="filtering_menu menu">${item}</div>
 			</button>
 		`;
@@ -452,6 +454,7 @@ class DataRenderer {
 
 	async template() {
 		return `
+			${(this.input.header) ? await this.createHeader() : ""}
 			<div class="pageDataRendererjs">
 				<div>
 					${await this.createSelect()}
@@ -601,7 +604,7 @@ class DataRenderer {
 					if (isMobile || src === "") {
 						result = page.cover_url;
 					} else {
-						result = `<a href="obsidian://advanced-uri?filepath=${page.file.link.path}"><img src="${src}" loading="lazy">`;
+						result = `<a data-tooltip-position="top" aria-label="${page.file.link.path}" data-href="${page.file.link.path}" href="${page.file.link.path}" class="internal-link" target="_blank" rel="noopener"><img src="${src}" loading="lazy">`;
 					}
 				} else {
 					// page의 프로퍼티 출력
@@ -1090,9 +1093,7 @@ try {
 
 	// 테이블 생성 코드 실행
 	// Create EL 
-	const template =  await dataRenderer.template();
-	dv.container.insertAdjacentHTML("beforeend", template);
-
+	dv.container.innerHTML = await dataRenderer.template();
 	// Dummy element to get removed
 	dv.el("div", "");
 
