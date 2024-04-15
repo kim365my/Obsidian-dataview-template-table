@@ -70,7 +70,6 @@ await dv.view("etc/module/views/pageDataRenderer", input)
 - row
 
 # 선택적 변수
-- header : (string) 제목추가, multi 콜아웃에서 해당 코드를 사용할 경우 유용
 - selectedValue : (number) 표시할 페이지 수를 작성
 - sortDefault : (number 0 / 1) : 최신순 / 오래된순으로 기본적으로 정렬할 것인지 선택
 - filter 
@@ -119,8 +118,10 @@ await dv.view("etc/module/views/pageDataRenderer", input)
 	- HasImgLocal 변수 제거
 	- filter 기능에 file.name, file.aliases, file.inlinks, file.outlinks 변수 지원 추가
 	- 이제부터 검색은 file.name 뿐만 아니라 file.aliases도 검사
+- 24/04/15
+	- header 변수 제거
+	- 이제부터 cover_url에 일일히 대표 이미지를 지정하지 않아도 자동으로 문서 내부의 이미지를 불러와 줌 (아쉽게도 로컬 이미지만 가능)
 */
-
 
 // Access Obsidian API
 const plugins = app.plugins.plugins
@@ -309,12 +310,6 @@ class DataRenderer {
 	}
 	
 	// ele 생성
-	/** 타이틀 생성 */
-	async createHeader() {
-		return `<h2 class="HyperMD-header HyperMD-header-2 title">
-					<span class="cm-header cm-header-2">${this.input.header}</span>
-				</h2>`
-	}
 	
 	/** select 생성 */
 	async createSelect() {
@@ -457,7 +452,6 @@ class DataRenderer {
 
 	async template() {
 		return `
-			${(this.input.header) ? await this.createHeader() : ""}
 			<div class="pageDataRendererjs">
 				<div>
 					${await this.createSelect()}
@@ -539,7 +533,7 @@ class DataRenderer {
 	}
 	
 	async checkForCSVFiles(file, value, rowsValue) {
-		const imgFormat = [".jpg", ".jpeg", ".png", ".bmp", ".tif", ".gif"];
+		const imgFormat = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".gif"];
 		const musicFormat = [".mp3", ".wav", ".ogg"];
 		
 		if (!file.includes("<img") && file.includes("![[") && imgFormat.some((format) => file.includes(format))) {
@@ -550,9 +544,9 @@ class DataRenderer {
 			if (file.includes("[![[")) {
 				const link = file.substring(file.indexOf("](") + 2, file.indexOf(")"));
 
-				rowsValue.push(`<a data-tooltip-position="top" aria-label="${link}" href="${link}" target="_blank"><img src="${fileRealLink}">`);
+				rowsValue.push(`<a data-tooltip-position="top" aria-label="${link}" href="${link}" target="_blank"><img src="${fileRealLink}" loading="lazy">`);
 			} else {
-				rowsValue.push(`<img src="${fileRealLink}">`);
+				rowsValue.push(`<img src="${fileRealLink}" loading="lazy">`);
 			}
 		} else if (musicFormat.some((format) => file.includes(format))) {
 			// 음악 파일
@@ -571,27 +565,47 @@ class DataRenderer {
 		if (this.input.row) {
 			const rowArr = this.input.row.split(",");
 			for(let row of rowArr) {
+				row = row.trim();
 				let result = "";
 				if (row.includes("file.")) {
+					// dv의 file 변수 지원
 					const fileType = row.replace("file.", "").trim();
 					result = page.file[fileType];
-				}
-
-				if (page[row] !== undefined && page[row] !== null) {
-					if (row === "cover_url") {
-						let src = "";
-						if (String(page.cover_url).startsWith("![[")) {
+ 				} else if (row === "cover_url") {
+					// cover_url
+					let src = "";
+					if (page.cover_url) {
+						if (dv.value.isLink(page.cover_url)) {
+							// 페이지 cover_url이 옵시디언 내부 이미지를 불러오는 방식이라면
 							src = await this.getFileRealLink(page.cover_url.path);
 						} else {
+							// 페이지 cover_url이 웹 이미지를 불러오는 형식이라면
 							src = page.cover_url;
 						}
-
-						if (isMobile || src === "") {
-							result = page.cover_url;
-						} else {
-							result = `<a href="obsidian://advanced-uri?filepath=${page.file.link.path}"><img src="${src}">`;
-						}
 					} else {
+						// page가 null인 경우, 문서 내부의 첫번째 이미지에서 불러오기
+						const imgFormat = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".gif"];
+						let imgItem = "";
+						for (let item of page.file.outlinks.values) {
+							if (imgFormat.some((format) => item.path.includes(format))) {
+								imgItem = item.path;
+								break;
+							}
+						};
+						
+						if (imgItem !== "") {
+							src = await this.getFileRealLink(imgItem);
+						}
+					}
+
+					if (isMobile || src === "") {
+						result = page.cover_url;
+					} else {
+						result = `<a href="obsidian://advanced-uri?filepath=${page.file.link.path}"><img src="${src}" loading="lazy">`;
+					}
+				} else {
+					// page의 프로퍼티 출력
+					if (page[row] !== undefined && page[row] !== null) {
 						result = page[row];
 					}
 				}
@@ -601,6 +615,7 @@ class DataRenderer {
 		}
 		return rowsValue;
 	}
+
 
 	async processMdHeader(rows) {
 		let result = [];
@@ -1075,7 +1090,9 @@ try {
 
 	// 테이블 생성 코드 실행
 	// Create EL 
-	dv.container.innerHTML = await dataRenderer.template();
+	const template =  await dataRenderer.template();
+	dv.container.insertAdjacentHTML("beforeend", template);
+
 	// Dummy element to get removed
 	dv.el("div", "");
 
