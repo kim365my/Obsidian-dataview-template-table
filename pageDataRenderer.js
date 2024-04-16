@@ -121,6 +121,8 @@ await dv.view("etc/module/views/pageDataRenderer", input)
 - 24/04/15
 	- 이제부터 cover_url에 일일히 대표 이미지를 지정하지 않아도 자동으로 문서 내부의 이미지를 불러와 줌 (아쉽게도 로컬 이미지만 가능)
 	- 더이상 advanced-uri가 없이도 작동
+- 24/04/16
+	- 모바일 버그 수정
 */
 
 // Access Obsidian API
@@ -166,7 +168,7 @@ class DataRenderer {
 		this.pageInitial = pages;
 
 		// Variables
-		this.MAX_BUTTONS_TO_SHOW = isMobile ? 1 : 10;
+		this.MAX_BUTTONS_TO_SHOW = isMobile ? 5 : 10;
 		
 		this.currentPage = 1;
 		this.startButton = 1;
@@ -285,7 +287,7 @@ class DataRenderer {
 		this.setEndButton();
 	}
 	async setCurrentPage(currentPage) {
-		this.currentPage = currentPage;
+		this.currentPage = Number(currentPage);
 	}
 	async setStartButton(startButton) {
 		this.startButton = startButton;
@@ -345,7 +347,12 @@ class DataRenderer {
 									<div class="search-input-clear-button"></div>
 								</div>`;
 		const searchButton = `<button class="searchBtn clickable-icon" aria-label="검색 필터 보기"><svg class="svg-icon lucide-search" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-search"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></button>`;
-		let result = (this.useSearchBtn) ?  searchContainer + searchButton:searchContainer;
+		let result = "";
+		if (isMobile) {
+			result = searchButton;
+		} else {
+			result = (this.useSearchBtn) ?  searchContainer + searchButton : searchContainer;
+		}
 		return result;
 	}
 
@@ -496,35 +503,39 @@ class DataRenderer {
 		// 페이지 슬라이스
 		const currentPageValue = (this.currentPage - 1) * this.selectedValue;
 		const pagesSlice = this.pages.slice(currentPageValue, currentPageValue + this.selectedValue);
-	
+
 		let header = [];
 		let rows = [];
-	
+		if (this.input.row) {
+			header = this.input.row.replace(/ /g,"").split(",");
+		} else {
+			header.push("file.link", "created");
+		}
+
 		if (isCsv) {
 			// CSV 파일일 경우
-			header = this.input.row.split(",");
 			rows = pagesSlice.map(async page => await this.processCsvRow(page, header));
 		} else {
 			// 일반 md 파일일 경우
-			header = pagesSlice.length > 0 ? await this.processMdHeader([...pagesSlice]) : [""];
-			rows = pagesSlice.map(async page => await this.processMdRow(page));
+			rows = pagesSlice.map(async page => await this.processMdRow(page, header));
 		}
-		
+
 		rows = await Promise.all(rows);
+
 		// 테이블 렌더링
 		dv.table(header, rows);
 	}
 	
 	// Get csv file row data
-	async processCsvRow(page, header) {
+	async processCsvRow(page, rowArr) {
 		let rowsValue = [];
-		for (let row of header) {
-			const value = page[String(row).trim()];
+		for (let row of rowArr) {
+			const value = page[row];
 			const file = String(value);
 			if (!file.includes("\,") && file.includes(",")) {
 				// 다중 정보가 저장되어 있는 경우
 				let result = [];
-				const text = file.trim().split(",");
+				const text = file.replace(/ /g,"").split(",");
 
 				text.forEach((v) => this.checkForCSVFiles(v, v, result));
 				rowsValue.push(result);
@@ -544,10 +555,10 @@ class DataRenderer {
 			const fileName = file.substring(file.indexOf("![[") + 3, file.indexOf(file.includes("|")? "|" :"]]"));
 			const fileRealLink = await this.getFileRealLink(fileName);
 			
-			if (file.includes("[![[")) {
+			if (file.includes("[![[") && file.includes("](")) {
 				const link = file.substring(file.indexOf("](") + 2, file.indexOf(")"));
 
-				rowsValue.push(`<a data-tooltip-position="top" aria-label="${link}" href="${link}" target="_blank"><img src="${fileRealLink}" loading="lazy">`);
+				rowsValue.push(`<a data-tooltip-position="top" aria-label="${link}" href="${link}" target="_blank" class="external-link"><img src="${fileRealLink}" loading="lazy">`);
 			} else {
 				rowsValue.push(`<img src="${fileRealLink}" loading="lazy">`);
 			}
@@ -562,72 +573,64 @@ class DataRenderer {
 	}
 	
 	// Get md file row data
-	async processMdRow(page) {
+	async processMdRow(page, rowArr) {
 		let rowsValue = [];
 
-		if (this.input.row) {
-			const rowArr = this.input.row.split(",");
-			for(let row of rowArr) {
-				row = row.trim();
-				let result = "";
-				if (row.includes("file.")) {
-					// dv의 file 변수 지원
-					const fileType = row.replace("file.", "").trim();
-					result = page.file[fileType];
- 				} else if (row === "cover_url") {
-					// cover_url
-					let src = "";
-					if (page.cover_url) {
-						if (dv.value.isLink(page.cover_url)) {
-							// 페이지 cover_url이 옵시디언 내부 이미지를 불러오는 방식이라면
-							src = await this.getFileRealLink(page.cover_url.path);
-						} else {
-							// 페이지 cover_url이 웹 이미지를 불러오는 형식이라면
-							src = page.cover_url;
-						}
+		for(let row of rowArr) {
+			let result = "";
+			if (row.includes("file.")) {
+				// dv의 file 변수 지원
+				const fileType = row.replace("file.", "");
+				switch(fileType) {
+					case "tasks":
+						const tasks = page.file.tasks;
+						const comppletedTasks = tasks.where(t => t.completed);
+						const value = Math.round((comppletedTasks.length / tasks.length || 0) * 100);
+						  
+						result = `<progress value="${value}" max="100"></progress><span>${value}%</span>`
+						break;
+					default:
+						result = page.file[fileType];
+						break;
+				}
+					
+			} else if (row === "cover_url") {
+				// cover_url
+				let src = "";
+				if (page.cover_url) {
+					if (dv.value.isLink(page.cover_url)) {
+						// 페이지 cover_url이 옵시디언 내부 이미지를 불러오는 방식이라면
+						src = await this.getFileRealLink(page.cover_url.path);
 					} else {
-						// page가 null인 경우, 문서 내부의 첫번째 이미지에서 불러오기
-						const imgFormat = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".gif"];
-						let imgItem = "";
-						for (let item of page.file.outlinks.values) {
-							if (imgFormat.some((format) => item.path.includes(format))) {
-								imgItem = item.path;
-								break;
-							}
-						};
-						
-						if (imgItem !== "") {
-							src = await this.getFileRealLink(imgItem);
-						}
-					}
-
-					if (isMobile || src === "") {
-						result = page.cover_url;
-					} else {
-						result = `<a data-tooltip-position="top" aria-label="${page.file.link.path}" data-href="${page.file.link.path}" href="${page.file.link.path}" class="internal-link" target="_blank" rel="noopener"><img src="${src}" loading="lazy">`;
+						// 페이지 cover_url이 웹 이미지를 불러오는 형식이라면
+						src = page.cover_url;
 					}
 				} else {
-					// page의 프로퍼티 출력
-					if (page[row] !== undefined && page[row] !== null) {
-						result = page[row];
-					}
+					// page가 null인 경우, 문서 내부의 첫번째 이미지에서 불러오기
+					const imgFormat = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".gif"];
+					for (let item of page.file.outlinks.values) {
+						if (imgFormat.some((format) => item.path.includes(format))) {
+							src = await this.getFileRealLink(item.path);
+							break;
+						}
+					};
 				}
 
-				rowsValue.push(result);
+				if (src === "") {
+					result = page.cover_url;
+				} else {
+					result = `<a data-tooltip-position="top" aria-label="${page.file.link.path}" data-href="${page.file.link.path}" href="${page.file.link.path}" class="internal-link" target="_blank" rel="noopener"><img src="${src}" loading="lazy">`;
+				}
+			} else {
+				// page의 프로퍼티 출력
+				if (page[row] !== undefined && page[row] !== null) {
+					result = page[row];
+				}
 			}
+
+			rowsValue.push(result);
 		}
 		return rowsValue;
-	}
-
-
-	async processMdHeader(rows) {
-		let result = [];
-
-		if (this.input.row) { 
-			const rowArr = this.input.row.split(",");
-			rowArr.forEach((e) => result.push(e.trim()));
-		}
-		return result;
 	}
 	
 	async getFileRealLink(value) {
@@ -717,26 +720,30 @@ class DataManipulator {
 	}
 	/** Handle Pagination Button Click */
 	async handlePrevNextButtonClick(direction) {
-		if (direction === "prev" && this.dataRenderer.startButton > this.dataRenderer.MAX_BUTTONS_TO_SHOW) {
+		const startButton = Number(this.dataRenderer.startButton);
+		const currentPage = Number(this.dataRenderer.currentPage);
+		const MAX_BUTTONS_TO_SHOW = Number(this.dataRenderer.MAX_BUTTONS_TO_SHOW)
+
+		if (direction === "prev" && startButton > MAX_BUTTONS_TO_SHOW) {
 			// Prev Btn
 			if (isMobile) {
-				this.dataRenderer.setCurrentPage(this.dataRenderer.currentPage--);
-			} else {
-				this.dataRenderer.setStartButton(this.dataRenderer.startButton - this.dataRenderer.MAX_BUTTONS_TO_SHOW);
-			}
-		} else if (direction === "next" && this.dataRenderer.currentPage < this.dataRenderer.fullPagination) {
+				this.dataRenderer.setCurrentPage(startButton - MAX_BUTTONS_TO_SHOW);
+			} 
+			this.dataRenderer.setStartButton(startButton - MAX_BUTTONS_TO_SHOW);
+		} else if (direction === "next" && currentPage < this.dataRenderer.fullPagination) {
 			// Next Btn
 			if (isMobile) {
-				this.dataRenderer.setCurrentPage(this.dataRenderer.currentPage++);
-			} else {
-				this.dataRenderer.setStartButton(this.dataRenderer.startButton + this.dataRenderer.MAX_BUTTONS_TO_SHOW);
+				this.dataRenderer.setCurrentPage(startButton + MAX_BUTTONS_TO_SHOW);
 			}
+			this.dataRenderer.setStartButton(startButton + MAX_BUTTONS_TO_SHOW);
 		}
 
 		await this.updatePagination();
 
 		// 모바일일 경우 다음 페이지로 바로 이동
-		if (isMobile) await this.dataRenderer.createQueryResult();
+		if (isMobile) {
+			await this.dataRenderer.createQueryResult();
+		}
 	}
 	
 	/** 검색 결과 랜더링 함수 */
@@ -923,7 +930,9 @@ class DataManipulator {
 	
 	async handleFilter(pages, ...index) {
 		// 검색어가 있는 경우 검색 결과 내에서 필터링
-		pages = await this.searchPage(pages);
+		if (!isMobile) {
+			pages = await this.searchPage(pages);
+		}
 
 		if (index.length !== 0) {
 			if (index[0] === 0) {
@@ -967,8 +976,8 @@ class DataManipulator {
 	}
 
 	// Modal
-    // Suggester modal
-    async suggester(names, values) {
+    // fuzzySuggest modal
+    async fuzzySuggest(names, values) {
         const { FuzzySuggestModal } = obsidian
         let data = new Promise((resolve, reject) => {
 
@@ -1062,11 +1071,11 @@ class DataManipulator {
 	async useFilterModal(item, pages) {
 		let index = 0;
 		if (isCsv) {
-			const data = await this.suggester(item, item);
+			const data = await this.fuzzySuggest(item, item);
 			index = Number(item.findIndex((b) => b === data));
 		} else {
 			const label = item.map((b) => b.label);
-			const data = await this.suggester(label, item);
+			const data = await this.fuzzySuggest(label, item);
 			index = Number(item.findIndex((b) => b.label === data.label));
 		}
 		this.handleFilter(pages, index);
@@ -1075,12 +1084,28 @@ class DataManipulator {
 	/** 모바일에서 정렬 데이터 받을 경우 modal */
 	async useSortModal(item, pages) {
 		const label = item.map((b) => b.label);
-		const data = await this.suggester(label, item);
+		const data = await this.fuzzySuggest(label, item);
 		const index = Number(item.findIndex((b) => b.label === data.label));
 		this.handleSort(pages, index);
 	}
-}
 
+	/** 모바일에서 검색 데이터 받을 경우 modal */
+	async useSearchModal(pages) {
+		// 적용된 필터가 있는 경우 필터 결과 내에서 검색
+		if(this.dataRenderer.filter.length !== 0) {
+			pages = await this.filterPage(pages);
+		}
+
+		const label = pages.map((b) => (!isCsv)? b.file.name: b.title);
+		const data = await this.fuzzySuggest(label, pages);
+		pages = pages.filter((b) => b === data);
+
+		this.dataRenderer.setPages(pages);
+		this.dataRenderer.resetPages();
+		this.dataRenderer.createQueryResult();
+		this.updatePagination();
+	}
+}
 
 // Run
 try {
@@ -1113,24 +1138,31 @@ try {
 	dv.container.querySelector(".selectPageNum").addEventListener("change", (e) => dataManipulator.handleSelectPageNum(Number(e.target.value)));
 	
 	// 검색 이벤트 리스너
-	if (dataRenderer.useSearchBtn) {
+	if (!isMobile) {
+		if (dataRenderer.useSearchBtn) {
+			const searchBtn = dv.container.querySelector(".searchBtn");
+			searchBtn.addEventListener("click", (e) => {
+				if(searchBtn.classList.contains(IS_ACTIVE)) {
+					searchBtn.classList.remove(IS_ACTIVE);
+				} else {
+					searchBtn.classList.add(IS_ACTIVE);
+					dv.container.querySelector(".textSearch").focus();
+				}
+			})
+		}
+		dv.container.querySelector(".textSearch").addEventListener("input", async (e) => {
+			dataManipulator.handleSearch(pages);
+		});
+		dv.container.querySelector(".search-input-clear-button").addEventListener("click", async (e) => {
+			dv.container.querySelector(".textSearch").value = null;
+			dataManipulator.handleSearch(pages);
+		});
+	} else {
 		const searchBtn = dv.container.querySelector(".searchBtn");
 		searchBtn.addEventListener("click", (e) => {
-			if(searchBtn.classList.contains(IS_ACTIVE)) {
-				searchBtn.classList.remove(IS_ACTIVE);
-			} else {
-				searchBtn.classList.add(IS_ACTIVE);
-				dv.container.querySelector(".textSearch").focus();
-			}
-		})
+			dataManipulator.useSearchModal(pages);
+		});
 	}
-	dv.container.querySelector(".textSearch").addEventListener("input", async (e) => {
-		dataManipulator.handleSearch(pages);
-	});
-	dv.container.querySelector(".search-input-clear-button").addEventListener("click", async (e) => {
-		dv.container.querySelector(".textSearch").value = null;
-		dataManipulator.handleSearch(pages);
-	});
 
 	// pagination 이벤트 리스너
 	dv.container.querySelectorAll(".pagination button").forEach((value) => {
@@ -1209,8 +1241,8 @@ try {
 		});
 	});
 
-	// 데이터가 CSV인지에 대한 처리
-	if (isCsv) {
+	// CSV 새 row 데이터 추가는 PC에서만 가능
+	if (isCsv && !isMobile) {
 		dv.container.querySelector(".addNewFileBtn").addEventListener("click", (e) => {
 			dataManipulator.updateCSVdata(pages)
 		});

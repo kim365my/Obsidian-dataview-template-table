@@ -137,3 +137,5 @@ await dv.view("etc/module/views/pageDataRenderer", input)
 - 24/04/15
 	- 이제부터 cover_url에 일일히 대표 이미지를 지정하지 않아도 자동으로 문서 내부의 이미지를 불러와 줌 (아쉽게도 로컬 이미지만 가능)
 	- 더이상 advanced-uri가 없이도 작동
+- 24/04/16
+	- 모바일 버그 수정
