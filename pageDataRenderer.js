@@ -85,8 +85,10 @@ await dv.view("etc/module/views/pageDataRenderer", input)
 - sort : sort를 추가할 수 있음
 - sortDefault : sort 중에서 기본적으로 사용하고 싶은 필터가 있을 경우 해당 번호 작성 (0부터 시작하므로 주의)
 - option
-	- useFilterModal : 필터를 모달로 사용해서 받음
-	- useSearchBtn : 검색창을 버튼으로 교체
+	- useFilterModal : 필터를 모달로
+	- useSortModal : 정렬창을 모달로 
+	- useSearchBtn : 검색창을 버튼으로
+	- useSearchModal: 검색창을 모달로, (useSearchBtn과 함께 사용하지 않아도 됨)
 
 # 변경기록
 - 24/02/04 : 초기버전
@@ -123,6 +125,8 @@ await dv.view("etc/module/views/pageDataRenderer", input)
 	- 더이상 advanced-uri가 없이도 작동
 - 24/04/16
 	- 모바일 버그 수정
+- 24/04/21
+	- 자료형 실수한 거 수정
 */
 
 // Access Obsidian API
@@ -275,6 +279,7 @@ class DataRenderer {
 		// option setting
 		this.useFilterModal = (input.option)? input.option.includes("useFilterModal") : false;
 		this.useSortModal = (input.option)? input.option.includes("useSortModal") : false;
+		this.useSearchModal = (input.option)? input.option.includes("useSearchModal") : false;
 		this.useSearchBtn = (input.option)? input.option.includes("useSearchBtn") : false;
 	}
 	// 변수 설정 메소드
@@ -283,14 +288,14 @@ class DataRenderer {
 		this.setEndButton();
 	}
 	async setSelectValue(selectedValue) {
-		this.selectedValue = selectedValue;
+		this.selectedValue = Number(selectedValue);
 		this.setEndButton();
 	}
 	async setCurrentPage(currentPage) {
 		this.currentPage = Number(currentPage);
 	}
 	async setStartButton(startButton) {
-		this.startButton = startButton;
+		this.startButton = Number(startButton);
 		this.setEndButton();
 	}
 	async setEndButton() {
@@ -348,7 +353,7 @@ class DataRenderer {
 								</div>`;
 		const searchButton = `<button class="searchBtn clickable-icon" aria-label="검색 필터 보기"><svg class="svg-icon lucide-search" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-search"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></button>`;
 		let result = "";
-		if (isMobile) {
+		if (isMobile || this.useSearchModal) {
 			result = searchButton;
 		} else {
 			result = (this.useSearchBtn) ?  searchContainer + searchButton : searchContainer;
@@ -490,19 +495,18 @@ class DataRenderer {
 		dv.container.lastChild.remove();
 
 		// 페이지 정렬
-		let pages;
+		let pages = this.pages;
 		const selectSort = this.sort[this.selectSortValue];
 		if (selectSort.type.includes("file")) {
 			const fileType = selectSort.type.substring(selectSort.type.indexOf("file.") + 5, selectSort.type.length);
-			pages = this.pages.sort((b) => b.file[fileType], selectSort.sort);
+			pages = pages.sort((b) => b.file[fileType], selectSort.sort);
 		} else {
-			pages = this.pages.sort((b) => b[selectSort.type], selectSort.sort);
+			pages = pages.sort((b) => b[selectSort.type], selectSort.sort);
 		}
-		this.setPages(pages);
 
 		// 페이지 슬라이스
 		const currentPageValue = (this.currentPage - 1) * this.selectedValue;
-		const pagesSlice = this.pages.slice(currentPageValue, currentPageValue + this.selectedValue);
+		const pagesSlice = pages.slice(currentPageValue, currentPageValue + this.selectedValue);
 
 		let header = [];
 		let rows = [];
@@ -532,12 +536,11 @@ class DataRenderer {
 		for (let row of rowArr) {
 			const value = page[row];
 			const file = String(value);
-			if (!file.includes("\,") && file.includes(",")) {
+			if (file.includes(",") && file.includes("[[")) {
 				// 다중 정보가 저장되어 있는 경우
 				let result = [];
-				const text = file.replace(/ /g,"").split(",");
-
-				text.forEach((v) => this.checkForCSVFiles(v, v, result));
+				const content = file.split(",");
+				content.forEach((v) => this.checkForCSVFiles(v.trim(), v.trim(), result));
 				rowsValue.push(result);
 			} else {
 				await this.checkForCSVFiles(file, value, rowsValue);
@@ -560,13 +563,13 @@ class DataRenderer {
 
 				rowsValue.push(`<a data-tooltip-position="top" aria-label="${link}" href="${link}" target="_blank" class="external-link"><img src="${fileRealLink}" loading="lazy">`);
 			} else {
-				rowsValue.push(`<img src="${fileRealLink}" loading="lazy">`);
+				rowsValue.push(`<span><img src="${fileRealLink}" loading="lazy"></span>`);
 			}
 		} else if (musicFormat.some((format) => file.includes(format))) {
 			// 음악 파일
 			const fileRealLink = await this.getFileRealLink(value.path);
 
-			rowsValue.push(`<span alt="${value.path}" src="${value.path}" class="internal-embed media-embed audio-embed is-loaded"><audio controls="" controlslist="nodownload" src="${fileRealLink}" loop=""></audio></span>`);
+			rowsValue.push(`<span alt="${value.path}" src="${value.path}" class="internal-embed media-embed audio-embed is-loaded"><audio controls="" controlslist="nodownload" src="${fileRealLink}"></audio></span>`);
 		} else {
 			rowsValue.push(value);
 		}
@@ -584,10 +587,12 @@ class DataRenderer {
 				switch(fileType) {
 					case "tasks":
 						const tasks = page.file.tasks;
-						const comppletedTasks = tasks.where(t => t.completed);
-						const value = Math.round((comppletedTasks.length / tasks.length || 0) * 100);
-						  
-						result = `<progress value="${value}" max="100"></progress><span>${value}%</span>`
+						if (tasks.length !== 0) {
+							const comppletedTasks = tasks.where(t => t.completed);
+							const value = Math.round((comppletedTasks.length / tasks.length || 0) * 100);
+							  
+							result = `<progress value="${value}" max="100"></progress><span>${value}%</span>`
+						}
 						break;
 					default:
 						result = page.file[fileType];
@@ -619,7 +624,7 @@ class DataRenderer {
 				if (src === "") {
 					result = page.cover_url;
 				} else {
-					result = `<a data-tooltip-position="top" aria-label="${page.file.link.path}" data-href="${page.file.link.path}" href="${page.file.link.path}" class="internal-link" target="_blank" rel="noopener"><img src="${src}" loading="lazy">`;
+					result = `<a data-tooltip-position="top" aria-label="${page.file.name}" data-href="${page.file.name}" href="${page.file.link.path}" class="internal-link" target="_blank" rel="noopener"><img src="${src}" loading="lazy">`;
 				}
 			} else {
 				// page의 프로퍼티 출력
@@ -656,7 +661,8 @@ class DataManipulator {
 
 	/** CSV 파일 수정 후 저장시 */
 	async updateCSVdata(pages) {
-		let content = (this.dataRenderer.selectSortValue === 0 ) ? pages.values.reverse() : pages.values;
+		const selectSortValue = Number(this.dataRenderer.selectSortValue);
+		let content = (selectSortValue === 0 ) ? pages.values.reverse() : pages.values;
 
 		const fileName = this.dataRenderer.input.pages;
 		const data = await this.multiSuggestDouble(pages, "CSV에 새로운 데이터를 추가합니다");
@@ -668,10 +674,10 @@ class DataManipulator {
 			// Save file
 			fs.writeFile(`${app.vault.adapter.basePath}/${fileName}`, '\ufeff' + file, { encoding:"utf-8" });
 			
-			if (this.dataRenderer.selectSortValue === 0) {
+			if (selectSortValue === 0) {
 				pages.value = pages.values.reverse();
 			}
-			this.handleSort(pages, this.dataRenderer.selectSortValue);
+			this.handleSort(pages, selectSortValue);
 		}
 	}
 
@@ -722,28 +728,21 @@ class DataManipulator {
 	async handlePrevNextButtonClick(direction) {
 		const startButton = Number(this.dataRenderer.startButton);
 		const currentPage = Number(this.dataRenderer.currentPage);
-		const MAX_BUTTONS_TO_SHOW = Number(this.dataRenderer.MAX_BUTTONS_TO_SHOW)
+		const MAX_BUTTONS_TO_SHOW = Number(this.dataRenderer.MAX_BUTTONS_TO_SHOW);
+		const fullPagination = Number(this.dataRenderer.fullPagination);
 
 		if (direction === "prev" && startButton > MAX_BUTTONS_TO_SHOW) {
 			// Prev Btn
-			if (isMobile) {
-				this.dataRenderer.setCurrentPage(startButton - MAX_BUTTONS_TO_SHOW);
-			} 
+			this.dataRenderer.setCurrentPage(startButton - MAX_BUTTONS_TO_SHOW);
 			this.dataRenderer.setStartButton(startButton - MAX_BUTTONS_TO_SHOW);
-		} else if (direction === "next" && currentPage < this.dataRenderer.fullPagination) {
+		} else if (direction === "next" && currentPage < fullPagination) {
 			// Next Btn
-			if (isMobile) {
-				this.dataRenderer.setCurrentPage(startButton + MAX_BUTTONS_TO_SHOW);
-			}
+			this.dataRenderer.setCurrentPage(startButton + MAX_BUTTONS_TO_SHOW);
 			this.dataRenderer.setStartButton(startButton + MAX_BUTTONS_TO_SHOW);
 		}
 
 		await this.updatePagination();
-
-		// 모바일일 경우 다음 페이지로 바로 이동
-		if (isMobile) {
-			await this.dataRenderer.createQueryResult();
-		}
+		await this.dataRenderer.createQueryResult();
 	}
 	
 	/** 검색 결과 랜더링 함수 */
@@ -787,47 +786,55 @@ class DataManipulator {
 				selectFilterValue.forEach((index) => {
 					const input = this.dataRenderer.filter;
 					const filter = input[index];
+					
 					if (isCsv) {
+						// csv인 경우
 						const metadata = String(b.metadata).toLowerCase().trim();
 						result = result && metadata.includes(filter);
 					} else {
+						// md 파일인 경우
+						const target = (filter.target)? String(filter.target).toLowerCase().trim(): null;
+						// target이 프로퍼티인 경우 target은 key, target_content는 value인 형태
+						const targetValue = (filter.target_content) ? String(filter.target_content).toLowerCase().trim(): null;
 						// filter type에 따라서 구분
-						const target_isInclude = filter.target_isInclude === "true" || false;
+						const isIncludeTarget = filter.target_isInclude === "true" || false;
 
 						switch (filter.type) {
 							// 프로퍼티의 tags만 고르는 경우
 							case "tags":
-								if (target_isInclude) {
-									result = result && b.tags.includes(filter.target);
+								if (isIncludeTarget) {
+									result = result && b.tags.includes(target);
 								} else {
-									result = result && !b.tags.includes(filter.target);
+									result = result && !b.tags.includes(target);
 								}
 								break;
 							// 프로퍼티를 고르는 경우
 							case "property":
-								const property = b[filter.target];
-								if (filter.target_content) {
-									if (dv.value.isDate(property)) {
-										// 날짜 데이터인 경우
-										if (filter.target_content.includes("~")) {
-											// 기간 설정
-											const dateDuration = filter.target_content.split("~");
-											const firstDate = dv.date(dateDuration[0].trim());
-
-											const lastDate = (dateDuration[1].includes("now"))? new Date(): dv.date(dateDuration[1].trim());
+								const property = b[target];
+								if (targetValue) {
+									switch (dv.value.typeOf(property)) {
+										case "date":
+											if (targetValue.includes("~")) {
+												// 기간 설정
+												const dateDuration = targetValue.split("~");
+												const firstDate = dv.date(dateDuration[0].trim());
 	
-											result = result && firstDate <= property && lastDate >= property;
-										} else {
-											const date = dv.date(filter.target_content);
-											result = result && (date - property) === 0;
-										}
-									} else if (dv.value.isArray(property)) {
-										// 배열인 경우
-										result = result && property.includes(filter.target_content);
-									} else {
-										result = result &&  String(property).toLowerCase() === String(filter.target_content).toLowerCase();
+												const lastDate = (dateDuration[1].includes("now"))? new Date(): dv.date(dateDuration[1].trim());
+		
+												result = result && firstDate <= property && lastDate >= property;
+											} else {
+												const date = dv.date(targetValue);
+												result = result && (date - property) === 0;
+											}
+											break;
+										case "array":
+											result = result && property.includes(targetValue);
+											break;
+										default:
+											result = result &&  String(property).toLowerCase() === String(targetValue).toLowerCase();
+											break;
 									}
-								} else if (target_isInclude) {
+								} else if (isIncludeTarget) {
 									result = result && (property !== null && property !== undefined);
 								} else {
 									result = result && (property == null || property == undefined || property == "");
@@ -836,33 +843,35 @@ class DataManipulator {
 							// file
 							// 문서내부의 전체 tags를 고르는 경우
 							case "file.tags":
-								if (target_isInclude) {
-									result = result && b.file.tags.values.includes(filter.target);
+								if (isIncludeTarget) {
+									result = result && b.file.tags.values.includes(target);
 								} else {
-									result = result && !b.file.tags.values.includes(filter.target);
+									result = result && !b.file.tags.values.includes(target);
 								}
 								break;
 							case "file.name":
 							case "file.aliases":
-								const fileName = b.file.name;
+							case "file.link":
+								const fileName = String(b.file.name).toLowerCase();
 								const fileAliases = b.file.aliases.values;
-								if (target_isInclude) {
-									result = result && (fileName.includes(filter.target) || fileAliases.some((value) => value.includes(filter.target)));
+								if (isIncludeTarget) {
+									result = result && (fileName.includes(target.toLowerCase()) || fileAliases.some((value) => value.toLowerCase().includes(target.toLowerCase())));
 								} else {
-									result = result && (!fileName.includes(filter.target) || !fileAliases.some((value) => value.includes(filter.target)));
+									result = result && (!fileName.includes(target.toLowerCase()) || !fileAliases.some((value) => value.toLowerCase().includes(target.toLowerCase())));
 								}
 								break;
 							case "file.inlinks":
 							case "file.outlinks":
 								const type = filter.type.replace("file.", "").trim();
 								const fileType = b.file[type].values;
-								if (target_isInclude) {
+								if (isIncludeTarget) {
 									result = result && (fileType.length !== 0);
 								} else {
-									result = result && fileType.some((value) => value.path.includes(filter.target));
+									result = result && fileType.some((value) => String(value.path).toLowerCase().includes(target));
 								}
 								break;
 							default:
+								console.log("pageDataRenderer.js: 작성하신 필터 타입은 지원하지 않습니다.");
 								break;
 						}
 					}
@@ -930,7 +939,7 @@ class DataManipulator {
 	
 	async handleFilter(pages, ...index) {
 		// 검색어가 있는 경우 검색 결과 내에서 필터링
-		if (!isMobile) {
+		if (!isMobile && !this.dataRenderer.useSearchModal) {
 			pages = await this.searchPage(pages);
 		}
 
@@ -964,7 +973,7 @@ class DataManipulator {
 			pages = await this.filterPage(pages);
 		}
 		// csv 파일인 경우
-		if(isCsv && index !== this.dataRenderer.selectSortValue) {  
+		if(isCsv && index !== Number(this.dataRenderer.selectSortValue)) {  
 			pages.values = pages.values.reverse();
 		}
 
@@ -1095,10 +1104,13 @@ class DataManipulator {
 		if(this.dataRenderer.filter.length !== 0) {
 			pages = await this.filterPage(pages);
 		}
+		const values = [{"file":{"name": "모두보기"}, "title":"모두보기"}, ...pages.values];
+		const label = values.map((b) => (!isCsv)? b.file.name: b.title);
+		const data = await this.fuzzySuggest(label, values);
 
-		const label = pages.map((b) => (!isCsv)? b.file.name: b.title);
-		const data = await this.fuzzySuggest(label, pages);
-		pages = pages.filter((b) => b === data);
+		if (data.title !== "모두보기") {
+			pages = pages.filter((b) => b === data);
+		}
 
 		this.dataRenderer.setPages(pages);
 		this.dataRenderer.resetPages();
@@ -1138,7 +1150,12 @@ try {
 	dv.container.querySelector(".selectPageNum").addEventListener("change", (e) => dataManipulator.handleSelectPageNum(Number(e.target.value)));
 	
 	// 검색 이벤트 리스너
-	if (!isMobile) {
+	if (isMobile || dataRenderer.useSearchModal) {
+		const searchBtn = dv.container.querySelector(".searchBtn");
+		searchBtn.addEventListener("click", (e) => {
+			dataManipulator.useSearchModal(pages);
+		});
+	} else {
 		if (dataRenderer.useSearchBtn) {
 			const searchBtn = dv.container.querySelector(".searchBtn");
 			searchBtn.addEventListener("click", (e) => {
@@ -1156,11 +1173,6 @@ try {
 		dv.container.querySelector(".search-input-clear-button").addEventListener("click", async (e) => {
 			dv.container.querySelector(".textSearch").value = null;
 			dataManipulator.handleSearch(pages);
-		});
-	} else {
-		const searchBtn = dv.container.querySelector(".searchBtn");
-		searchBtn.addEventListener("click", (e) => {
-			dataManipulator.useSearchModal(pages);
 		});
 	}
 
