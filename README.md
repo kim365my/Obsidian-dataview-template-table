@@ -1,3 +1,6 @@
+https://github.com/kim365my/obsidian-page-data-viewer
+플러그인으로 변환했습니다!
+
 # Obsidian-dataview-template-table
 This is dataviewjs code for Obsidian's data view.
 
